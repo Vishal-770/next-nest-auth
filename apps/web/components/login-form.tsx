@@ -15,7 +15,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useMutation } from "@tanstack/react-query";
 import { authApi, type LoginData } from "@/lib/auth-api";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { createSession } from "@/actions/session";
 
 // Zod schema for login form validation
@@ -34,6 +34,8 @@ export function LoginForm({
   ...props
 }: React.ComponentProps<"div">) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const callbackUrl = searchParams.get("callbackUrl");
 
   const {
     register,
@@ -57,8 +59,10 @@ export function LoginForm({
         },
       });
 
-      // Redirect to home page after successful login
-      router.push("/");
+      // Redirect to callback URL or home page after successful login
+      const redirectUrl = callbackUrl ? decodeURIComponent(callbackUrl) : "/";
+      router.push(redirectUrl);
+      router.refresh();
     },
   });
 

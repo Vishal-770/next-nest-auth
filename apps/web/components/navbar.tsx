@@ -1,5 +1,6 @@
 import { getSession } from "@/actions/session";
 import { SignOutButton } from "./signout-button";
+import { ModeToggle } from "./mode-toggle";
 import Link from "next/link";
 
 export async function Navbar() {
@@ -21,10 +22,12 @@ export async function Navbar() {
                   {session.user.name}
                 </span>
               </span>
+              <ModeToggle />
               <SignOutButton />
             </>
           ) : (
             <>
+              <ModeToggle />
               <Link
                 href="/auth/login"
                 className="text-sm font-medium hover:underline underline-offset-4"
