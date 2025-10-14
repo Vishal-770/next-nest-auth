@@ -4,10 +4,12 @@ import {
   BadRequestException,
   NotFoundException,
   InternalServerErrorException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { CreateUserDto } from 'src/user/dto/create-user.dto';
 import { UserService } from 'src/user/user.service';
 import { EmailService } from 'src/email/email.service';
+import { verify } from 'argon2';
 
 @Injectable()
 export class AuthService {
@@ -122,5 +124,25 @@ export class AuthService {
         'An error occurred during email verification. Please try again later.',
       );
     }
+  }
+
+  async validateLocalUser(email: string, password: string) {
+    const user = await this.userService.findUserByEmail(email);
+
+    if (!user) throw new UnauthorizedException('Invalid Credentials');
+
+    // Check if user's email is verified
+    if (!user.verified) {
+      throw new UnauthorizedException(
+        'Email not verified. Please check your email and verify your account before logging in.',
+      );
+    }
+
+    const isPasswordMatched = await verify(user.password, password);
+
+    if (!isPasswordMatched)
+      throw new UnauthorizedException('Invalid Credentials');
+
+    return { id: user.id, name: user.name, email: user.email };
   }
 }

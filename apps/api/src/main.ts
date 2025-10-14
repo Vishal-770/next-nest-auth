@@ -6,6 +6,12 @@ import { AllExceptionsFilter } from './common/filters/http-exception.filter';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
+  // Enable CORS for frontend
+  app.enableCors({
+    origin: 'http://localhost:3000',
+    credentials: true,
+  });
+
   // Global exception filter to prevent server crashes
   app.useGlobalFilters(new AllExceptionsFilter());
 

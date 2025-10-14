@@ -1,11 +1,13 @@
 {
   "$schema": "https://turborepo.com/schema.json",
   "ui": "tui",
+  "globalEnv": ["NODE_ENV", "SESSION_SECRET_KEY"],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
       "inputs": ["$TURBO_DEFAULT$", ".env*"],
-      "outputs": [".next/**", "!.next/cache/**"]
+      "outputs": [".next/**", "!.next/cache/**"],
+      "env": ["SESSION_SECRET_KEY", "NODE_ENV"]
     },
     "lint": {
       "dependsOn": ["^lint"]
@@ -15,7 +17,8 @@
     },
     "dev": {
       "cache": false,
-      "persistent": true
+      "persistent": true,
+      "env": ["SESSION_SECRET_KEY", "NODE_ENV"]
     }
   }
 }
