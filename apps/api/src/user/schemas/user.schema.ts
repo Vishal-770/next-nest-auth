@@ -21,7 +21,7 @@ export class User {
   verified: boolean;
   @Prop({ type: String, default: AuthType.EMAIL })
   authType: AuthType;
-  @Prop({ required: true })
+  @Prop({ type: String, default: '' })
   verificationCode: string;
   @Prop({ type: String, default: Role.User })
   role: Role;

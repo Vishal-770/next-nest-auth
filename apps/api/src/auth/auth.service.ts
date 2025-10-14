@@ -1,4 +1,10 @@
-import { ConflictException, Injectable } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  BadRequestException,
+  NotFoundException,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import { CreateUserDto } from 'src/user/dto/create-user.dto';
 import { UserService } from 'src/user/user.service';
 import { EmailService } from 'src/email/email.service';
@@ -11,35 +17,110 @@ export class AuthService {
   ) {}
 
   async registerUser(createUserDto: CreateUserDto) {
-    const user = await this.userService.findUserByEmail(createUserDto.email);
-    if (user) {
-      throw new ConflictException('User Already Exists');
-    }
-
-    // Create the user with verification code
-    const newUser = await this.userService.create(createUserDto);
-
-    // Send verification email
     try {
-      await this.emailService.sendVerificationEmail(
-        newUser.email,
-        newUser.name,
-        newUser.verificationCode,
-      );
+      const user = await this.userService.findUserByEmail(createUserDto.email);
+      if (user?.verified) {
+        throw new ConflictException('User Already Exists');
+      }
+
+      // Create or update user with verification code (for unverified users)
+      const newUser =
+        await this.userService.upsertUserWithVerification(createUserDto);
+
+      if (!newUser) {
+        throw new ConflictException('User Already Exists and is Verified');
+      }
+
+      // Send verification email
+      try {
+        await this.emailService.sendVerificationEmail(
+          newUser.email,
+          newUser.name,
+          newUser.verificationCode,
+        );
+      } catch (error) {
+        console.error('Failed to send verification email:', error);
+        // Continue even if email fails - user is created
+      }
+
+      return {
+        id: newUser._id,
+        name: newUser.name,
+        email: newUser.email,
+        verified: newUser.verified,
+        message:
+          'Registration successful! Please check your email to verify your account.',
+      };
     } catch (error) {
-      console.error('Failed to send verification email:', error);
-      // You can decide whether to throw an error or just log it
-      // For now, we'll continue even if email fails
+      // If it's already a NestJS exception, re-throw it
+      if (error instanceof ConflictException) {
+        throw error;
+      }
+
+      // Log unexpected errors
+      console.error('Error during user registration:', error);
+      throw new InternalServerErrorException(
+        'An error occurred during registration. Please try again later.',
+      );
+    }
+  }
+
+  async verifyEmail(verificationCode: string) {
+    // Validate verification code format
+    if (!verificationCode || verificationCode.trim() === '') {
+      throw new BadRequestException('Verification code is required');
     }
 
-    // Return user without sensitive data
-    return {
-      id: newUser._id,
-      name: newUser.name,
-      email: newUser.email,
-      verified: newUser.verified,
-      message:
-        'Registration successful! Please check your email to verify your account.',
-    };
+    if (verificationCode.length !== 64) {
+      throw new BadRequestException('Invalid verification code format');
+    }
+
+    try {
+      const result = await this.userService.verifyUser(verificationCode);
+
+      if (!result) {
+        throw new NotFoundException(
+          'Invalid or expired verification code. Please request a new verification email.',
+        );
+      }
+
+      if (result.alreadyVerified) {
+        return {
+          success: true,
+          message: 'Email already verified. You can now log in.',
+          user: {
+            id: result.user._id,
+            name: result.user.name,
+            email: result.user.email,
+            verified: result.user.verified,
+          },
+        };
+      }
+
+      return {
+        success: true,
+        message: 'Email verified successfully! You can now log in.',
+        user: {
+          id: result.user._id,
+          name: result.user.name,
+          email: result.user.email,
+          verified: result.user.verified,
+        },
+      };
+    } catch (error) {
+      // If it's already a NestJS exception, re-throw it
+      if (
+        error instanceof BadRequestException ||
+        error instanceof NotFoundException
+      ) {
+        throw error;
+      }
+
+      // Log unexpected errors
+      console.error('Error during email verification:', error);
+      throw new InternalServerErrorException(
+        'An error occurred during email verification. Please try again later.',
+      );
+    }
   }
 }
