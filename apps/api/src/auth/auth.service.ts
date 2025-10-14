@@ -143,6 +143,6 @@ export class AuthService {
     if (!isPasswordMatched)
       throw new UnauthorizedException('Invalid Credentials');
 
-    return { id: user.id, name: user.name, email: user.email };
+    return { id: user.id as number, name: user.name, email: user.email };
   }
 }

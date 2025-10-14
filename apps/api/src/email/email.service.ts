@@ -151,9 +151,14 @@ export class EmailService {
     };
 
     try {
-      const info = await this.transporter.sendMail(mailOptions);
+      const info = (await this.transporter.sendMail(mailOptions)) as {
+        messageId: string;
+      };
 
-      return { success: true, messageId: info.messageId };
+      return {
+        success: true,
+        messageId: info.messageId,
+      };
     } catch (error) {
       console.error('Error sending email:', error);
       throw new Error('Failed to send verification email');

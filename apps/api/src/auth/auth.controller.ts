@@ -19,7 +19,7 @@ export class AuthController {
   }
   @UseGuards(LocalAuthGuard)
   @Post('signin')
-  login(@Request() req) {
+  login(@Request() req: { user: any }): any {
     return req.user;
   }
 }
