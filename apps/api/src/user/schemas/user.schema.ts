@@ -4,6 +4,10 @@ export enum AuthType {
   EMAIL = 'email',
   GOOGLE = 'google',
 }
+export enum Role {
+  User = 'user',
+  Admin = 'admin',
+}
 export type UserDocument = User & Document;
 @Schema({ timestamps: true })
 export class User {
@@ -17,5 +21,9 @@ export class User {
   verified: boolean;
   @Prop({ type: String, default: AuthType.EMAIL })
   authType: AuthType;
+  @Prop({ required: true })
+  verificationCode: string;
+  @Prop({ type: String, default: Role.User })
+  role: Role;
 }
 export const UserSchema = SchemaFactory.createForClass(User);

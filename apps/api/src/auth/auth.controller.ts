@@ -10,4 +10,9 @@ export class AuthController {
   create(@Body() createUserDto: CreateUserDto) {
     return this.authService.registerUser(createUserDto);
   }
+
+  @Post('verify')
+  verify() {
+    
+  }
 }
