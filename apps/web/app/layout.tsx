@@ -3,6 +3,7 @@ import localFont from "next/font/local";
 import "./globals.css";
 import { QueryProvider } from "@/components/providers/query-provider";
 import { ThemeProvider } from "@/components/providers/theme-provider";
+import { config } from "@/lib/config";
 
 const geistSans = localFont({
   src: "./fonts/GeistVF.woff",
@@ -14,7 +15,7 @@ const geistMono = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "Auth App",
+  title: config.app.name,
   description: "Secure authentication system with Next.js and NestJS",
 };
 
@@ -28,7 +29,7 @@ export default function RootLayout({
       <body className={`${geistSans.variable} ${geistMono.variable}`}>
         <ThemeProvider
           attribute="class"
-          defaultTheme="system"
+          defaultTheme={config.ui.defaultTheme}
           enableSystem
           disableTransitionOnChange
         >

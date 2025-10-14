@@ -1,12 +1,13 @@
 import axios from "axios";
+import { config } from "./config";
 
 // Create axios instance with base configuration
 export const api = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000",
+  baseURL: config.api.url,
   headers: {
     "Content-Type": "application/json",
   },
-  timeout: 10000, // 10 seconds
+  timeout: config.api.timeout,
 });
 
 // Request interceptor
@@ -36,7 +37,7 @@ api.interceptors.response.use(
       // Request was made but no response
       return Promise.reject(
         new Error(
-          "Cannot connect to server. Please ensure the backend is running on http://localhost:8000"
+          `Cannot connect to server. Please ensure the backend is running on ${config.api.url}`
         )
       );
     } else {

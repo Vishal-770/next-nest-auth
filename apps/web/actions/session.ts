@@ -2,6 +2,7 @@
 
 import { SignJWT, jwtVerify } from "jose";
 import { cookies } from "next/headers";
+import { config } from "@/lib/config";
 
 export type Session = {
   user: {
@@ -11,7 +12,7 @@ export type Session = {
   };
 };
 
-const secretKey = process.env.SESSION_SECRET_KEY;
+const secretKey = config.session.secretKey;
 if (!secretKey) {
   throw new Error(
     "SESSION_SECRET_KEY is not defined in environment variables. Please add it to your .env file."
@@ -20,21 +21,23 @@ if (!secretKey) {
 const encodedKey = new TextEncoder().encode(secretKey);
 
 export async function createSession(payload: Session) {
-  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+  const expiresAt = new Date(
+    Date.now() + config.session.expiryDays * 24 * 60 * 60 * 1000
+  );
   const session = await new SignJWT(payload)
     .setProtectedHeader({
       alg: "HS256",
     })
     .setIssuedAt()
-    .setExpirationTime("7d")
+    .setExpirationTime(`${config.session.expiryDays}d`)
     .sign(encodedKey);
 
   const cookieStore = await cookies();
   cookieStore.set("session", session, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    httpOnly: config.cookie.httpOnly,
+    secure: config.cookie.secure,
     expires: expiresAt,
-    sameSite: "lax",
+    sameSite: config.cookie.sameSite,
     path: "/",
   });
 }

@@ -1,13 +1,43 @@
 {
   "$schema": "https://turborepo.com/schema.json",
   "ui": "tui",
-  "globalEnv": ["NODE_ENV", "SESSION_SECRET_KEY"],
+  "globalEnv": [
+    "NODE_ENV",
+    "SESSION_SECRET_KEY",
+    "SESSION_EXPIRY_DAYS",
+    "COOKIE_SECURE",
+    "COOKIE_SAME_SITE",
+    "COOKIE_HTTP_ONLY",
+    "NEXT_PUBLIC_API_URL",
+    "NEXT_PUBLIC_API_TIMEOUT",
+    "NEXT_PUBLIC_APP_NAME",
+    "NEXT_PUBLIC_APP_URL",
+    "NEXT_PUBLIC_ENABLE_SIGNUP",
+    "NEXT_PUBLIC_ENABLE_EMAIL_VERIFICATION",
+    "NEXT_PUBLIC_REDIRECT_DELAY",
+    "NEXT_PUBLIC_DEFAULT_THEME"
+  ],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
       "inputs": ["$TURBO_DEFAULT$", ".env*"],
       "outputs": [".next/**", "!.next/cache/**"],
-      "env": ["SESSION_SECRET_KEY", "NODE_ENV"]
+      "env": [
+        "SESSION_SECRET_KEY",
+        "NODE_ENV",
+        "SESSION_EXPIRY_DAYS",
+        "COOKIE_SECURE",
+        "COOKIE_SAME_SITE",
+        "COOKIE_HTTP_ONLY",
+        "NEXT_PUBLIC_API_URL",
+        "NEXT_PUBLIC_API_TIMEOUT",
+        "NEXT_PUBLIC_APP_NAME",
+        "NEXT_PUBLIC_APP_URL",
+        "NEXT_PUBLIC_ENABLE_SIGNUP",
+        "NEXT_PUBLIC_ENABLE_EMAIL_VERIFICATION",
+        "NEXT_PUBLIC_REDIRECT_DELAY",
+        "NEXT_PUBLIC_DEFAULT_THEME"
+      ]
     },
     "lint": {
       "dependsOn": ["^lint"]
@@ -18,7 +48,22 @@
     "dev": {
       "cache": false,
       "persistent": true,
-      "env": ["SESSION_SECRET_KEY", "NODE_ENV"]
+      "env": [
+        "SESSION_SECRET_KEY",
+        "NODE_ENV",
+        "SESSION_EXPIRY_DAYS",
+        "COOKIE_SECURE",
+        "COOKIE_SAME_SITE",
+        "COOKIE_HTTP_ONLY",
+        "NEXT_PUBLIC_API_URL",
+        "NEXT_PUBLIC_API_TIMEOUT",
+        "NEXT_PUBLIC_APP_NAME",
+        "NEXT_PUBLIC_APP_URL",
+        "NEXT_PUBLIC_ENABLE_SIGNUP",
+        "NEXT_PUBLIC_ENABLE_EMAIL_VERIFICATION",
+        "NEXT_PUBLIC_REDIRECT_DELAY",
+        "NEXT_PUBLIC_DEFAULT_THEME"
+      ]
     }
   }
 }
