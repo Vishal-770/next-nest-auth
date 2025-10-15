@@ -4,6 +4,7 @@ This guide explains how to work with protected resources in both the frontend (N
 
 ## Table of Contents
 - [Backend: Creating Protected Routes](#backend-creating-protected-routes)
+- [Extracting User ID from JWT in Controllers](#extracting-user-id-from-jwt-in-controllers)
 - [Frontend: Making Authenticated API Requests](#frontend-making-authenticated-api-requests)
 - [Extending JWT Authentication to Other Modules](#extending-jwt-authentication-to-other-modules)
 - [Complete Example](#complete-example)
@@ -90,6 +91,310 @@ export class UserController {
   create(@Body() createUserDto: CreateUserDto) {
     // Protected
   }
+}
+```
+
+---
+
+## Extracting User ID from JWT in Controllers
+
+When you use the `JwtAuthGuard`, the authenticated user data from the JWT token is automatically attached to the `request` object. Here's how to extract and use it in your controllers.
+
+### Method 1: Using `@Request()` Decorator
+
+The simplest way to access user data:
+
+```typescript
+import { Controller, Get, UseGuards, Request } from '@nestjs/common';
+import { JwtAuthGuard } from 'src/auth/guards/jwt-auth/jwt-auth.guard';
+
+@Controller('user')
+export class UserController {
+  constructor(private readonly userService: UserService) {}
+
+  @UseGuards(JwtAuthGuard)
+  @Get('profile')
+  getProfile(@Request() req) {
+    // Extract user data from the request
+    const userId = req.user.id;
+    const userName = req.user.name;
+    const userEmail = req.user.email;
+    
+    console.log('Current User ID:', userId);
+    console.log('Current User Name:', userName);
+    
+    return this.userService.findOne(userId);
+  }
+}
+```
+
+### Method 2: Custom Decorator (Recommended)
+
+Create a custom decorator for cleaner, more reusable code:
+
+**Step 1: Create the decorator file**
+
+```typescript
+// auth/decorators/current-user.decorator.ts
+import { createParamDecorator, ExecutionContext } from '@nestjs/common';
+
+export const CurrentUser = createParamDecorator(
+  (data: unknown, ctx: ExecutionContext) => {
+    const request = ctx.switchToHttp().getRequest();
+    return request.user;
+  },
+);
+
+export const CurrentUserId = createParamDecorator(
+  (data: unknown, ctx: ExecutionContext) => {
+    const request = ctx.switchToHttp().getRequest();
+    return request.user?.id;
+  },
+);
+```
+
+**Step 2: Use the decorator in controllers**
+
+```typescript
+import { Controller, Get, Patch, Body, Param, UseGuards, ForbiddenException } from '@nestjs/common';
+import { JwtAuthGuard } from 'src/auth/guards/jwt-auth/jwt-auth.guard';
+import { CurrentUser, CurrentUserId } from 'src/auth/decorators/current-user.decorator';
+import { UpdateUserDto } from './dto/update-user.dto';
+
+@Controller('user')
+export class UserController {
+  constructor(private readonly userService: UserService) {}
+
+  // Using @CurrentUser() - gets the whole user object
+  @UseGuards(JwtAuthGuard)
+  @Get('profile')
+  async getProfile(@CurrentUser() user) {
+    console.log('Full User Object:', user);
+    // user = { id: 1, name: 'John', email: 'john@example.com' }
+    return this.userService.findOne(user.id);
+  }
+
+  // Using @CurrentUserId() - gets only the user ID
+  @UseGuards(JwtAuthGuard)
+  @Get('my-posts')
+  async getMyPosts(@CurrentUserId() userId: number) {
+    console.log('User ID:', userId);
+    return this.postsService.findByUserId(userId);
+  }
+
+  // Verify user ownership before allowing updates
+  @UseGuards(JwtAuthGuard)
+  @Patch(':id')
+  async update(
+    @Param('id') id: string,
+    @Body() updateUserDto: UpdateUserDto,
+    @CurrentUserId() currentUserId: number,
+  ) {
+    // Ensure users can only update their own profile
+    if (currentUserId.toString() !== id) {
+      throw new ForbiddenException('You can only update your own profile');
+    }
+    return this.userService.update(id, updateUserDto);
+  }
+}
+```
+
+### Method 3: Type-Safe User Interface
+
+For better TypeScript support, create an interface:
+
+```typescript
+// auth/interfaces/request-user.interface.ts
+export interface RequestUser {
+  id: number;
+  name: string;
+  email: string;
+}
+```
+
+Update the decorator to use the interface:
+
+```typescript
+// auth/decorators/current-user.decorator.ts
+import { createParamDecorator, ExecutionContext } from '@nestjs/common';
+import { RequestUser } from '../interfaces/request-user.interface';
+
+export const CurrentUser = createParamDecorator(
+  (data: unknown, ctx: ExecutionContext): RequestUser => {
+    const request = ctx.switchToHttp().getRequest();
+    return request.user;
+  },
+);
+
+export const CurrentUserId = createParamDecorator(
+  (data: unknown, ctx: ExecutionContext): number => {
+    const request = ctx.switchToHttp().getRequest();
+    return request.user?.id;
+  },
+);
+```
+
+Use with type safety:
+
+```typescript
+import { CurrentUser } from 'src/auth/decorators/current-user.decorator';
+import { RequestUser } from 'src/auth/interfaces/request-user.interface';
+
+@UseGuards(JwtAuthGuard)
+@Get('profile')
+async getProfile(@CurrentUser() user: RequestUser) {
+  // TypeScript now provides autocomplete for user properties
+  const userId: number = user.id;
+  const userName: string = user.name;
+  const userEmail: string = user.email;
+  
+  return this.userService.findOne(userId);
+}
+```
+
+### Real-World Example: Posts with User Ownership
+
+```typescript
+// posts/posts.controller.ts
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  UseGuards,
+  ForbiddenException,
+} from '@nestjs/common';
+import { JwtAuthGuard } from 'src/auth/guards/jwt-auth/jwt-auth.guard';
+import { CurrentUserId } from 'src/auth/decorators/current-user.decorator';
+import { PostsService } from './posts.service';
+import { CreatePostDto } from './dto/create-post.dto';
+import { UpdatePostDto } from './dto/update-post.dto';
+
+@Controller('posts')
+export class PostsController {
+  constructor(private readonly postsService: PostsService) {}
+
+  // Create post - automatically set the author
+  @UseGuards(JwtAuthGuard)
+  @Post()
+  async create(
+    @Body() createPostDto: CreatePostDto,
+    @CurrentUserId() userId: number,
+  ) {
+    return this.postsService.create({
+      ...createPostDto,
+      authorId: userId, // Set from JWT token
+    });
+  }
+
+  // Get all posts by current user
+  @UseGuards(JwtAuthGuard)
+  @Get('my-posts')
+  async getMyPosts(@CurrentUserId() userId: number) {
+    return this.postsService.findByAuthor(userId);
+  }
+
+  // Update post - only the author can update
+  @UseGuards(JwtAuthGuard)
+  @Patch(':id')
+  async update(
+    @Param('id') id: string,
+    @Body() updatePostDto: UpdatePostDto,
+    @CurrentUserId() currentUserId: number,
+  ) {
+    const post = await this.postsService.findOne(id);
+    
+    // Check if the current user is the author
+    if (post.authorId !== currentUserId) {
+      throw new ForbiddenException('You can only edit your own posts');
+    }
+    
+    return this.postsService.update(id, updatePostDto);
+  }
+
+  // Delete post - only the author can delete
+  @UseGuards(JwtAuthGuard)
+  @Delete(':id')
+  async remove(@Param('id') id: string, @CurrentUserId() currentUserId: number) {
+    const post = await this.postsService.findOne(id);
+    
+    // Check if the current user is the author
+    if (post.authorId !== currentUserId) {
+      throw new ForbiddenException('You can only delete your own posts');
+    }
+    
+    return this.postsService.remove(id);
+  }
+}
+```
+
+### How It Works Behind the Scenes
+
+1. **Client sends request** with `Authorization: Bearer <token>` header
+2. **JwtAuthGuard intercepts** the request and extracts the token
+3. **JwtStrategy validates** the token and decodes the payload
+4. **Strategy's `validate()` method** returns the user object:
+   ```typescript
+   // jwt.stratergies.ts
+   validate(payload: AuthJwtPayLoad) {
+     const userId = payload.sub;
+     return this.authService.validateJwtUser(userId);
+     // Returns: { id: 1, name: 'John', email: 'john@example.com' }
+   }
+   ```
+5. **User object is attached** to `req.user` by Passport
+6. **Controller accesses** `req.user` via `@Request()` or `@CurrentUser()`
+
+### Best Practices
+
+✅ **DO:**
+- Always use `@UseGuards(JwtAuthGuard)` before accessing user data
+- Create custom decorators for cleaner code
+- Validate ownership before allowing CRUD operations
+- Use TypeScript interfaces for type safety
+- Throw `ForbiddenException` for authorization errors
+
+❌ **DON'T:**
+- Access `req.user` without the guard (it will be undefined)
+- Trust user input for IDs - always use the JWT user ID
+- Expose sensitive user data in error messages
+- Skip ownership validation on protected resources
+
+### Common Pitfalls
+
+**Mistake 1: Forgetting the Guard**
+```typescript
+// ❌ BAD - req.user will be undefined
+@Get('profile')
+getProfile(@CurrentUser() user) {
+  return user; // undefined!
+}
+
+// ✅ GOOD - Guard validates and populates req.user
+@UseGuards(JwtAuthGuard)
+@Get('profile')
+getProfile(@CurrentUser() user) {
+  return user; // Works!
+}
+```
+
+**Mistake 2: Trusting User Input**
+```typescript
+// ❌ BAD - User could pass any ID
+@UseGuards(JwtAuthGuard)
+@Get('posts/:userId')
+getPosts(@Param('userId') userId: string) {
+  return this.postsService.findByUser(userId); // Security issue!
+}
+
+// ✅ GOOD - Use JWT user ID
+@UseGuards(JwtAuthGuard)
+@Get('my-posts')
+getMyPosts(@CurrentUserId() userId: number) {
+  return this.postsService.findByUser(userId); // Secure!
 }
 ```
 
