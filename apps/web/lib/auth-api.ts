@@ -1,4 +1,5 @@
 import { api } from "./api";
+import { authApi as authenticatedApi } from "./authenticated-api";
 
 // Types
 export interface SignupData {
@@ -21,9 +22,10 @@ export interface LoginData {
 }
 
 export interface LoginResponse {
-  id: string;
+  id: number;
   name: string;
   email: string;
+  accessToken: string;
 }
 
 export interface VerifyEmailData {
@@ -39,6 +41,10 @@ export interface VerifyEmailResponse {
     email: string;
     verified: boolean;
   };
+}
+
+export interface ProtectedResponse {
+  message: string;
 }
 
 // Auth API calls
@@ -59,5 +65,10 @@ export const authApi = {
   verifyEmail: async (data: VerifyEmailData): Promise<VerifyEmailResponse> => {
     const response = await api.post<VerifyEmailResponse>("/auth/verify", data);
     return response.data;
+  },
+
+  // Protected route (requires JWT token) - automatically includes Bearer token
+  getProtected: async (): Promise<ProtectedResponse> => {
+    return authenticatedApi.get<ProtectedResponse>("/auth/protected");
   },
 };

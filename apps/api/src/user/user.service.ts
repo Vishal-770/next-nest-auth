@@ -84,4 +84,7 @@ export class UserService {
       )
       .exec();
   }
+  async findOne(userId: number) {
+    return this.userModel.findById(userId).exec();
+  }
 }

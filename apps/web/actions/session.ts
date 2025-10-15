@@ -6,9 +6,10 @@ import { config } from "@/lib/config";
 
 export type Session = {
   user: {
-    id: string;
+    id: number;
     name: string;
-    email?: string;
+    email: string;
+    accessToken: string;
   };
 };
 

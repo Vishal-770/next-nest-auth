@@ -10,12 +10,15 @@ import { CreateUserDto } from 'src/user/dto/create-user.dto';
 import { UserService } from 'src/user/user.service';
 import { EmailService } from 'src/email/email.service';
 import { verify } from 'argon2';
+import { AuthJwtPayLoad } from './types/Auth.jwtPayload';
+import { JwtService } from '@nestjs/jwt';
 
 @Injectable()
 export class AuthService {
   constructor(
     private readonly userService: UserService,
     private readonly emailService: EmailService,
+    private readonly jwtService: JwtService,
   ) {}
 
   async registerUser(createUserDto: CreateUserDto) {
@@ -144,5 +147,32 @@ export class AuthService {
       throw new UnauthorizedException('Invalid Credentials');
 
     return { id: user.id as number, name: user.name, email: user.email };
+  }
+  async login(userId: number, name?: string, email?: string) {
+    const { accessToken } = await this.generateTokens(userId);
+    return {
+      id: userId,
+      name,
+      email,
+      accessToken,
+    };
+  }
+
+  async generateTokens(userId: number) {
+    const payload: AuthJwtPayLoad = { sub: userId };
+
+    const [accessToken] = await Promise.all([
+      this.jwtService.signAsync(payload),
+    ]);
+    return {
+      accessToken,
+    };
+  }
+  async validateJwtUser(userId: number): Promise<{ id: number }> {
+    const user = await this.userService.findOne(userId);
+    if (!user) {
+      throw new UnauthorizedException('Invalid token - user not found');
+    }
+    return { id: Number(user.id) };
   }
 }
