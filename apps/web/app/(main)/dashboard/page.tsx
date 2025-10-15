@@ -4,7 +4,7 @@ import React from "react";
 
 export default async function Dashboard() {
   const session = await getSession();
-
+  console.log(session);
   let protectedData = null;
   let error = null;
 

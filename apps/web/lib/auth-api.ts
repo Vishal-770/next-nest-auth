@@ -26,6 +26,7 @@ export interface LoginResponse {
   name: string;
   email: string;
   accessToken: string;
+  refreshToken: string;
 }
 
 export interface VerifyEmailData {

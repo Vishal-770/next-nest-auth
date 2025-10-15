@@ -9,6 +9,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule } from '@nestjs/config';
 import jwtConfig from './config/jwt.config';
 import { JwtStratergy } from 'src/stratergies/jwt.stratergies';
+import refreshConfig from './config/refresh.config';
 @Module({
   imports: [
     UserModule,
@@ -16,6 +17,7 @@ import { JwtStratergy } from 'src/stratergies/jwt.stratergies';
     PassportModule,
     JwtModule.registerAsync(jwtConfig.asProvider()),
     ConfigModule.forFeature(jwtConfig),
+    ConfigModule.forFeature(refreshConfig),
   ],
   controllers: [AuthController],
   providers: [AuthService, LocalStratergy, JwtStratergy],

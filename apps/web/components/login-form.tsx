@@ -49,7 +49,7 @@ export function LoginForm({
   const loginMutation = useMutation({
     mutationFn: (data: LoginData) => authApi.login(data),
     onSuccess: async (data) => {
-      console.log("Login successful! Server response:", data);
+      // console.log("Login successful! Server response:", data);
 
       // Create session with user data
       await createSession({
@@ -58,6 +58,7 @@ export function LoginForm({
           name: data.name,
           email: data.email,
           accessToken: data.accessToken,
+          refreshToken: data.refreshToken,
         },
       });
 

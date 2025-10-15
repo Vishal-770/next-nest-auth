@@ -5,6 +5,7 @@ import {
   NotFoundException,
   InternalServerErrorException,
   UnauthorizedException,
+  Inject,
 } from '@nestjs/common';
 import { CreateUserDto } from 'src/user/dto/create-user.dto';
 import { UserService } from 'src/user/user.service';
@@ -12,6 +13,8 @@ import { EmailService } from 'src/email/email.service';
 import { verify } from 'argon2';
 import { AuthJwtPayLoad } from './types/Auth.jwtPayload';
 import { JwtService } from '@nestjs/jwt';
+import refreshConfig from './config/refresh.config';
+import type { ConfigType } from '@nestjs/config';
 
 @Injectable()
 export class AuthService {
@@ -19,6 +22,8 @@ export class AuthService {
     private readonly userService: UserService,
     private readonly emailService: EmailService,
     private readonly jwtService: JwtService,
+    @Inject(refreshConfig.KEY)
+    private refrehTokenConfig: ConfigType<typeof refreshConfig>,
   ) {}
 
   async registerUser(createUserDto: CreateUserDto) {
@@ -149,23 +154,26 @@ export class AuthService {
     return { id: user.id as number, name: user.name, email: user.email };
   }
   async login(userId: number, name?: string, email?: string) {
-    const { accessToken } = await this.generateTokens(userId);
+    const { accessToken, refreshToken } = await this.generateTokens(userId);
     return {
       id: userId,
       name,
       email,
       accessToken,
+      refreshToken,
     };
   }
 
   async generateTokens(userId: number) {
     const payload: AuthJwtPayLoad = { sub: userId };
 
-    const [accessToken] = await Promise.all([
+    const [accessToken, refreshToken] = await Promise.all([
       this.jwtService.signAsync(payload),
+      this.jwtService.signAsync(payload, this.refrehTokenConfig),
     ]);
     return {
       accessToken,
+      refreshToken,
     };
   }
   async validateJwtUser(userId: number): Promise<{ id: number }> {
