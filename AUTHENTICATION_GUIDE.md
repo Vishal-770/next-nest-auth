@@ -5,6 +5,7 @@ This guide explains how to work with protected resources in both the frontend (N
 ## Table of Contents
 - [Backend: Creating Protected Routes](#backend-creating-protected-routes)
 - [Frontend: Making Authenticated API Requests](#frontend-making-authenticated-api-requests)
+- [Extending JWT Authentication to Other Modules](#extending-jwt-authentication-to-other-modules)
 - [Complete Example](#complete-example)
 
 ---
@@ -188,6 +189,349 @@ async function fetchWithManualToken() {
   return response.data;
 }
 ```
+
+---
+
+## Extending JWT Authentication to Other Modules
+
+By default, JWT authentication is configured in the `AuthModule`. To use JWT authentication in other modules (like `UserModule`, `PostsModule`, etc.), follow these steps:
+
+### Step 1: Export Auth Providers from AuthModule
+
+Make sure your `AuthModule` exports the necessary providers:
+
+```typescript
+// auth/auth.module.ts
+import { Module } from '@nestjs/common';
+import { AuthService } from './auth.service';
+import { AuthController } from './auth.controller';
+import { UserModule } from 'src/user/user.module';
+import { EmailModule } from 'src/email/email.module';
+import { PassportModule } from '@nestjs/passport';
+import { LocalStratergy } from 'src/stratergies/local.stratergy';
+import { JwtModule } from '@nestjs/jwt';
+import { ConfigModule } from '@nestjs/config';
+import jwtConfig from './config/jwt.config';
+import { JwtStratergy } from 'src/stratergies/jwt.stratergies';
+
+@Module({
+  imports: [
+    UserModule,
+    EmailModule,
+    PassportModule,
+    JwtModule.registerAsync(jwtConfig.asProvider()),
+    ConfigModule.forFeature(jwtConfig),
+  ],
+  controllers: [AuthController],
+  providers: [AuthService, LocalStratergy, JwtStratergy],
+  exports: [JwtModule, PassportModule, JwtStratergy], // 👈 Export these
+})
+export class AuthModule {}
+```
+
+### Step 2: Import AuthModule in Your Target Module
+
+```typescript
+// user/user.module.ts
+import { Module } from '@nestjs/common';
+import { UserService } from './user.service';
+import { UserController } from './user.controller';
+import { MongooseModule } from '@nestjs/mongoose';
+import { User, UserSchema } from './schemas/user.schema';
+import { AuthModule } from 'src/auth/auth.module'; // 👈 Import AuthModule
+
+@Module({
+  imports: [
+    MongooseModule.forFeature([{ name: User.name, schema: UserSchema }]),
+    AuthModule, // 👈 Add AuthModule to imports
+  ],
+  controllers: [UserController],
+  providers: [UserService],
+  exports: [UserService],
+})
+export class UserModule {}
+```
+
+### Step 3: Protect Routes and Validate User Ownership
+
+Now you can use `JwtAuthGuard` in your UserController and ensure users can only access their own data:
+
+```typescript
+// user/user.controller.ts
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  UseGuards,
+  Request,
+  ForbiddenException,
+} from '@nestjs/common';
+import { UserService } from './user.service';
+import { UpdateUserDto } from './dto/update-user.dto';
+import { JwtAuthGuard } from 'src/auth/guards/jwt-auth/jwt-auth.guard';
+
+@Controller('user')
+export class UserController {
+  constructor(private readonly userService: UserService) {}
+
+  // ✅ Get current user's profile (Protected)
+  @UseGuards(JwtAuthGuard)
+  @Get('profile')
+  async getProfile(@Request() req) {
+    // req.user contains the authenticated user data from JWT
+    return this.userService.findById(req.user.id);
+  }
+
+  // ✅ Get user by ID (Protected - Only allow users to access their own data)
+  @UseGuards(JwtAuthGuard)
+  @Get(':id')
+  async findOne(@Param('id') id: string, @Request() req) {
+    // Validate that the user is accessing their own data
+    if (req.user.id.toString() !== id) {
+      throw new ForbiddenException('You can only access your own profile');
+    }
+    return this.userService.findById(id);
+  }
+
+  // ✅ Update user profile (Protected - Only the user can update their own data)
+  @UseGuards(JwtAuthGuard)
+  @Patch(':id')
+  async update(
+    @Param('id') id: string,
+    @Body() updateUserDto: UpdateUserDto,
+    @Request() req,
+  ) {
+    // Validate ownership
+    if (req.user.id.toString() !== id) {
+      throw new ForbiddenException('You can only update your own profile');
+    }
+    return this.userService.update(id, updateUserDto);
+  }
+
+  // ✅ Delete user account (Protected - Only the user can delete their own account)
+  @UseGuards(JwtAuthGuard)
+  @Delete(':id')
+  async remove(@Param('id') id: string, @Request() req) {
+    // Validate ownership
+    if (req.user.id.toString() !== id) {
+      throw new ForbiddenException('You can only delete your own account');
+    }
+    return this.userService.remove(id);
+  }
+}
+```
+
+### Step 4: Create Frontend API Functions
+
+Create a dedicated API file for user operations:
+
+```typescript
+// lib/user-api.ts
+import { authApi } from "./authenticated-api";
+
+export interface UserProfile {
+  id: string;
+  name: string;
+  email: string;
+  verified: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UpdateUserDto {
+  name?: string;
+  email?: string;
+}
+
+export const userApi = {
+  // Get current user's profile
+  getProfile: async (): Promise<UserProfile> => {
+    return authApi.get<UserProfile>("/user/profile");
+  },
+
+  // Get user by ID
+  getUserById: async (id: string): Promise<UserProfile> => {
+    return authApi.get<UserProfile>(`/user/${id}`);
+  },
+
+  // Update user profile
+  updateProfile: async (
+    id: string,
+    data: UpdateUserDto
+  ): Promise<UserProfile> => {
+    return authApi.patch<UserProfile>(`/user/${id}`, data);
+  },
+
+  // Delete user account
+  deleteAccount: async (id: string): Promise<void> => {
+    await authApi.delete(`/user/${id}`);
+  },
+};
+```
+
+### Step 5: Use in Frontend Components
+
+**Server Component Example:**
+
+```typescript
+// app/profile/page.tsx
+import { userApi } from "@/lib/user-api";
+
+export default async function ProfilePage() {
+  let profile = null;
+  let error = null;
+
+  try {
+    profile = await userApi.getProfile();
+  } catch (err) {
+    error = err instanceof Error ? err.message : "Failed to fetch profile";
+  }
+
+  if (error) {
+    return <div className="text-red-500">Error: {error}</div>;
+  }
+
+  return (
+    <div className="container mx-auto p-6">
+      <h1 className="text-2xl font-bold mb-4">My Profile</h1>
+      <div className="space-y-2">
+        <p><strong>Name:</strong> {profile.name}</p>
+        <p><strong>Email:</strong> {profile.email}</p>
+        <p><strong>Verified:</strong> {profile.verified ? "Yes" : "No"}</p>
+        <p><strong>Member since:</strong> {new Date(profile.createdAt).toLocaleDateString()}</p>
+      </div>
+    </div>
+  );
+}
+```
+
+**Client Component with Edit Functionality:**
+
+```typescript
+// components/profile-editor.tsx
+"use client";
+
+import { useState } from "react";
+import { userApi } from "@/lib/user-api";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+
+interface ProfileEditorProps {
+  userId: string;
+  initialName: string;
+}
+
+export function ProfileEditor({ userId, initialName }: ProfileEditorProps) {
+  const [name, setName] = useState(initialName);
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState("");
+
+  const handleUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setMessage("");
+
+    try {
+      await userApi.updateProfile(userId, { name });
+      setMessage("✅ Profile updated successfully!");
+    } catch (error) {
+      setMessage(`❌ ${error instanceof Error ? error.message : "Failed to update"}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handleUpdate} className="space-y-4">
+      <div>
+        <label htmlFor="name" className="block text-sm font-medium mb-2">
+          Name
+        </label>
+        <Input
+          id="name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          disabled={loading}
+        />
+      </div>
+      
+      <Button type="submit" disabled={loading}>
+        {loading ? "Updating..." : "Update Profile"}
+      </Button>
+
+      {message && (
+        <p className={message.includes("✅") ? "text-green-600" : "text-red-600"}>
+          {message}
+        </p>
+      )}
+    </form>
+  );
+}
+```
+
+### Step 6: Apply to Any Module
+
+You can apply this same pattern to any module in your application:
+
+**Example: Posts Module**
+
+```typescript
+// posts/posts.module.ts
+@Module({
+  imports: [
+    MongooseModule.forFeature([{ name: Post.name, schema: PostSchema }]),
+    AuthModule, // 👈 Import AuthModule
+  ],
+  controllers: [PostsController],
+  providers: [PostsService],
+})
+export class PostsModule {}
+
+// posts/posts.controller.ts
+@Controller('posts')
+export class PostsController {
+  // Only authenticated users can create posts
+  @UseGuards(JwtAuthGuard)
+  @Post()
+  create(@Body() createPostDto: CreatePostDto, @Request() req) {
+    return this.postsService.create({
+      ...createPostDto,
+      authorId: req.user.id, // Set author from authenticated user
+    });
+  }
+
+  // Only the post author can update their post
+  @UseGuards(JwtAuthGuard)
+  @Patch(':id')
+  async update(
+    @Param('id') id: string,
+    @Body() updatePostDto: UpdatePostDto,
+    @Request() req,
+  ) {
+    const post = await this.postsService.findOne(id);
+    
+    if (post.authorId !== req.user.id) {
+      throw new ForbiddenException('You can only edit your own posts');
+    }
+    
+    return this.postsService.update(id, updatePostDto);
+  }
+}
+```
+
+### Key Points for Module Extension
+
+1. ✅ **Export from AuthModule**: Always export `JwtModule`, `PassportModule`, and `JwtStratergy`
+2. ✅ **Import in Target Module**: Import `AuthModule` in any module that needs JWT authentication
+3. ✅ **Use JwtAuthGuard**: Apply `@UseGuards(JwtAuthGuard)` to protect routes
+4. ✅ **Access User Data**: Use `@Request() req` to access `req.user.id`, `req.user.name`, etc.
+5. ✅ **Validate Ownership**: Always check that users can only access/modify their own resources
+6. ✅ **Use Proper Exceptions**: Throw `ForbiddenException` for authorization errors
+7. ✅ **Frontend Integration**: Use the `authApi` client which automatically handles JWT tokens
 
 ---
 
